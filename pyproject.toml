@@ -30,9 +30,6 @@ aiohttp = ">=3.8.1"
 wfdb = ">=3.4.1"
 h5py = ">=3.6.0"
 
-[tool.poetry.group.build.dependencies]
-pyinstaller = ">=6.9.0"
-
 [tool.poetry.scripts]
 # Command line entry-point.
 biopeaks = "biopeaks.__main__:main"

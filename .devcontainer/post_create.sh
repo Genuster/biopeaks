@@ -7,4 +7,4 @@ curl -sSL https://install.python-poetry.org | python -
 # To make sure Poetry doesn't redundantly nest a virtual environment
 # within the Docker container we configure it as follows:
 poetry config virtualenvs.create false --local
-poetry install --with main,dev,build
+poetry install --with main,dev

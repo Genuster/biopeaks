@@ -1,15 +1,7 @@
 # Installation
 
-## As executable
+## Instructions for users without a Python installation
 
-For Windows you can download [biopeaks.exe](https://github.com/JanCBrammer/biopeaks/releases/latest). Double-click the 
-executable to run it. You don't need a Python installation on your computer to run the executable.
-Currently, there are no executables available for macOS or Linux
-(please [open an issue](https://help.github.com/en/github/managing-your-work-on-github/creating-an-issue) if you're interested).
-
-## As Python package
-
-### Instructions for users without a Python installation
 If you don't have experience with installing Python packages and/or if you
 aren't sure if you have Python on your computer start by setting up Python.
 Go to <https://docs.conda.io/en/latest/miniconda.html> and install the latest
@@ -27,17 +19,21 @@ pip install scipy numpy matplotlib pandas PySide6 biopeaks
 ```
 
 After the successful installation, open the application by typing
+
 ```
 biopeaks
 ```
+
 Note that every time you open the Anaconda Prompt, you need to activate the
 biopeaks environment before starting the application:
+
 ```
 conda activate biopeaks
 biopeaks
 ```
 
 ### Instructions for users who already have a Python installation
+
 Have a look at the project's [pyproject.toml file](https://github.com/JanCBrammer/biopeaks/blob/main/pyproject.toml)
 for an up-to-date list of the dependencies. In order to manage the dependencies, it is highly recommended to install
 `biopeaks` into an isolated environment using [miniconda](https://docs.conda.io/en/latest/miniconda.html),

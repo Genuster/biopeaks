@@ -6,7 +6,6 @@
 [![PyPI version](https://img.shields.io/pypi/v/biopeaks.svg)](https://pypi.org/project/biopeaks/)
 [![JOSS](https://joss.theoj.org/papers/10.21105/joss.02621/status.svg)](https://doi.org/10.21105/joss.02621)
 
-
 # General Information
 
 `biopeaks` is a straightforward graphical user interface for feature extraction from electrocardiogram (ECG), photoplethysmogram (PPG) and breathing biosignals.
@@ -25,9 +24,7 @@ peaks in breathing signals) with signal-specific, sensible defaults
 + .csv export of extrema and instantaneous features for further analysis (e.g., heart rate variability)
 + automatic analysis of multiple files (batch processing)
 
-
 ![GUI](https://github.com/JanCBrammer/biopeaks/raw/main/docs/images/screenshot_statistics.png)
-
 
 # Installation
 
@@ -37,33 +34,22 @@ peaks in breathing signals) with signal-specific, sensible defaults
 pip install biopeaks
 ```
 
-Alternatively, on Windows, download [biopeaks.exe](https://github.com/JanCBrammer/biopeaks/releases/latest)
-and run it. Running the executable does not require a Python installation.
-
 You can find more details on the installation [here](https://jancbrammer.github.io/biopeaks/installation.html).
-
 
 # Documentation
 
 Have a look at the [user guide](https://jancbrammer.github.io/biopeaks/user_guide.html) to get started with `biopeaks`.
 
-
-# Contributors welcome!
+# Contributors welcome
 
 Improvements or additions to the repository (documentation, tests, code) are welcome and encouraged.
 Spotted a typo in the documentation? Caught a bug in the code? Ideas for improving the documentation,
 increase test coverage, or adding features to the GUI? Get started with the [contributor guide](https://jancbrammer.github.io/biopeaks/contributor_guide.html).
 
-
 # Citation
 
 Please refer to the [biopeaks paper](https://joss.theoj.org/papers/10.21105/joss.02621) in The Journal of Open Source Software.
 
-
 # Changelog
 
 Have a look at the [changelog](https://jancbrammer.github.io/biopeaks/changelog.html) to get an overview of what has changed throughout the versions of `biopeaks`.
-
-
-
-

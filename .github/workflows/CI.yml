@@ -1,9 +1,3 @@
-# All CI tasks (testing, building) are maintained in this workflow file
-# and their inter-dependencies controlled with job-level `if` and `needs` until
-# GitHub Actions allows for them to be factored out into separate, inter-dependent
-# workflow files.
-# See https://github.community/t/depend-on-another-workflow/16311/8.
-
 name: CI
 on: [push, pull_request, release]    # runs on all branches
 env:
@@ -28,7 +22,7 @@ jobs:
         virtualenvs-create: false
 
     - name: Install biopeaks
-      run: poetry install --no-interaction --without build
+      run: poetry install --no-interaction --with main,dev
 
     - name: Install system dependencies for headless testing
       run: sudo ./.devcontainer/install_system_dependencies.sh
@@ -60,15 +54,7 @@ jobs:
     - name: Install and configure Poetry
       uses: snok/install-poetry@v1
       with:
-        virtualenvs-create: true
-        virtualenvs-in-project: true
-
-    - name: Load cached venv
-      id: cached-pip-wheelsy
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache
-        key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+        virtualenvs-create: false
 
     - name: Build and upload distribution
       env:
@@ -76,72 +62,3 @@ jobs:
         PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
       run:  |
         poetry publish -u $PYPI_USERNAME -p $PYPI_PASSWORD --build
-
-
-  build_executable:
-
-    needs: test
-    runs-on: windows-latest
-    if: github.event_name == 'release' && github.event.action == 'published'
-
-    steps:
-
-    - uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Install and configure Poetry
-      uses: snok/install-poetry@v1
-      with:
-        virtualenvs-create: true
-        virtualenvs-in-project: true
-
-    - name: Load cached venv
-      id: cached-pip-wheels
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache
-        key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
-
-    - name: Install dependencies
-      run: |
-        poetry install --no-interaction --no-root --no-dev --extras "pyinstaller"
-
-    - name: Build executable
-      shell: bash -l {0}
-      run:  |
-        source $VENV
-        pyinstaller --onefile --windowed --name=biopeaks --paths=D:\\a\\biopeaks\\biopeaks \
-        --hidden-import=distutils --hidden-import=distutils.version --hidden-import=distutils.unixccompiler \
-        --hidden-import=numpy.distutils --collect-all=numpy.distutils \
-        --icon=biopeaks\\images\\python_icon.ico biopeaks\\__main__.py
-
-    - name: Upload executable
-      uses: actions/upload-artifact@v4
-      with:
-        name: biopeaks_windows
-        path: dist/biopeaks.exe
-
-
-  upload_executable_to_release:    # separate job on Ubuntu since JasonEtco/upload-to-release@master only runs on Linux
-
-    needs: build_executable
-    runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'published'
-
-    steps:
-
-    - name: Download executable
-      uses: actions/download-artifact@v4
-      with:
-        name: biopeaks_windows
-
-    - name: Upload executable to release
-      uses: JasonEtco/upload-to-release@master
-      with:
-        args: biopeaks.exe application/octet-stream
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}    # token generated implicitly
