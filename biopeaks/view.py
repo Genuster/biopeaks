@@ -5,9 +5,11 @@ from PySide6.QtWidgets import (QWidget, QComboBox, QMainWindow,
                                QVBoxLayout, QHBoxLayout, QCheckBox,
                                QLabel, QStatusBar, QGroupBox, QDockWidget,
                                QLineEdit, QFormLayout, QPushButton,
-                               QProgressBar, QSplitter, QDialog)
+                               QProgressBar, QSplitter, QDialog,
+                               QSlider, QSpinBox)
 from PySide6.QtCore import Qt, QSignalMapper, QRegularExpression
 from PySide6.QtGui import QIcon, QRegularExpressionValidator, QAction
+import numpy as np
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as
                                                 FigureCanvas)
@@ -29,7 +31,7 @@ class CustomNavigationToolbar(NavigationToolbar):
     """
 
     toolitems = [t for t in NavigationToolbar.toolitems if t[0] in
-                 ("Home", "Pan", "Zoom", "Back", "Forward")]    # only retain desired functionality
+                 ("Home", "Back", "Forward")]
 
 
 class View(QMainWindow):
@@ -104,11 +106,35 @@ class View(QMainWindow):
         self.line22 = None
         self.figure2.subplots_adjust(left=0.04, right=0.98)
 
+        # Time slider for scrolling through signal.
+        self.timeslider = QSlider(Qt.Horizontal)
+        self.timeslider.setMinimum(0)
+        self.timeslider.setMaximum(0)
+        self.timeslider.setSingleStep(1)
+        self.timeslider.setPageStep(30)
+        self.timeslider.valueChanged.connect(self.scroll_view)
+
+        self.windowspinbox = QSpinBox()
+        self.windowspinbox.setMinimum(2)
+        self.windowspinbox.setMaximum(600)
+        self.windowspinbox.setValue(30)
+        self.windowspinbox.setSuffix(" s")
+        self.windowspinbox.valueChanged.connect(self.update_window)
+
         self.navitools = CustomNavigationToolbar(self.canvas0, self)
 
         # Peak editing.
         self.editcheckbox = QCheckBox("editable", self)
         self.editcheckbox.stateChanged.connect(self._model.set_peakseditable)
+
+        self.snaptomaxcheckbox = QCheckBox("snap to local max", self)
+        self.snaptomaxcheckbox.stateChanged.connect(self._model.set_snaptomax)
+
+        self.malikcheckbox = QCheckBox("show Malik violations", self)
+        self.malikcheckbox.stateChanged.connect(self._model.set_showmalik)
+        self.malikcheckbox.stateChanged.connect(
+            lambda: self._model.peaks_changed.emit(self._model.peaks)
+            if self._model.peaks is not None else None)
 
         # Peak saving during batch processing.
         self.savecheckbox = QCheckBox("save during batch processing", self)
@@ -294,6 +320,9 @@ class View(QMainWindow):
         openCustom.triggered.connect(lambda: self._model.set_filetype("Custom"))
         openCustom.triggered.connect(lambda: self.customfiledialog.exec())
         openSignal.addAction(openCustom)
+        openPlain = QAction("Plain (1 col, 1000 Hz)", self)
+        openPlain.triggered.connect(self.load_plain)
+        openSignal.addAction(openPlain)
 
         segmentSignal = QAction("select segment", self)
         segmentSignal.triggered.connect(self.segmentermap.map)
@@ -347,14 +376,13 @@ class View(QMainWindow):
 
         self.canvas0.setFocusPolicy(Qt.ClickFocus)    # only widgets (e.g. canvas) that currently have focus capture keyboard input
         self.canvas0.setFocus()
-        self.canvas0.mpl_connect("key_press_event",
-                                 self._controller.edit_peaks)    # connect canvas to keyboard input for peak editing
-        self.canvas0.mpl_connect("button_press_event", self.get_xcursor)    # connect canvas to mouse input for peak editing
+        self.canvas0.mpl_connect("key_press_event", self._controller.edit_peaks)
+        self.canvas0.mpl_connect("key_press_event", self.key_shortcuts)
+        self.canvas0.mpl_connect("button_press_event", self.get_xcursor)
 
         self.splitter = QSplitter(Qt.Vertical)    # arrange the three figure canvases in splitter object
         self.splitter.setOpaqueResize(False)    # resizing gets very slow otherwise once axes are populated
         self.splitter.addWidget(self.canvas0)
-        self.splitter.addWidget(self.canvas1)
         self.splitter.addWidget(self.canvas2)
         self.splitter.setChildrenCollapsible(False)
 
@@ -378,6 +406,8 @@ class View(QMainWindow):
 
         self.optionsgroupC = QGroupBox("peaks")
         self.vlayoutC.addWidget(self.editcheckbox)
+        self.vlayoutC.addWidget(self.snaptomaxcheckbox)
+        self.vlayoutC.addWidget(self.malikcheckbox)
         self.vlayoutC.addWidget(self.savecheckbox)
         self.vlayoutC.addWidget(self.correctcheckbox)
         self.optionsgroupC.setLayout(self.vlayoutC)
@@ -388,10 +418,26 @@ class View(QMainWindow):
         self.vlayoutD.addWidget(self.tidalampcheckbox)
         self.optionsgroupD.setLayout(self.vlayoutD)
 
+        self.vlayoutE = QFormLayout()
+        self.hpfield = QLineEdit("0.5")
+        self.hpfield.setPlaceholderText("off")
+        self.lpfield = QLineEdit()
+        self.lpfield.setPlaceholderText("off")
+        self.notchfield = QLineEdit()
+        self.notchfield.setPlaceholderText("off")
+        for field in (self.hpfield, self.lpfield, self.notchfield):
+            field.editingFinished.connect(self._apply_filter_settings)
+        self.optionsgroupE = QGroupBox("filters (Hz)")
+        self.vlayoutE.addRow(QLabel("HP"), self.hpfield)
+        self.vlayoutE.addRow(QLabel("LP"), self.lpfield)
+        self.vlayoutE.addRow(QLabel("Notch"), self.notchfield)
+        self.optionsgroupE.setLayout(self.vlayoutE)
+
         self.vlayout1.addWidget(self.optionsgroupA)
         self.vlayout1.addWidget(self.optionsgroupB)
         self.vlayout1.addWidget(self.optionsgroupC)
         self.vlayout1.addWidget(self.optionsgroupD)
+        self.vlayout1.addWidget(self.optionsgroupE)
         self.optionsgroupwidget = QWidget()
         self.optionsgroupwidget.setLayout(self.vlayout1)
         self.optionsgroup = QDockWidget("configurations", self)
@@ -403,8 +449,11 @@ class View(QMainWindow):
         self.addDockWidget(Qt.LeftDockWidgetArea, self.optionsgroup)
 
         self.vlayout0.addWidget(self.splitter)
+        self.vlayout0.addWidget(self.timeslider)
 
         self.hlayout0.addWidget(self.navitools)
+        self.hlayout0.addWidget(QLabel("window"))
+        self.hlayout0.addWidget(self.windowspinbox)
         self.vlayout0.addLayout(self.hlayout0)
 
         # Subscribe to updates from the Model.
@@ -439,6 +488,14 @@ class View(QMainWindow):
         self.navitools.update()    # reset navitools history
         self.line00 = self.ax00.plot(self._model.sec, signal, zorder=1)
         self.ax00.set_xlabel("seconds", fontsize="large", fontweight="heavy")
+        window = self.windowspinbox.value()
+        total = int(self._model.sec[-1])
+        self.timeslider.blockSignals(True)
+        self.timeslider.setMaximum(max(0, total - window))
+        self.timeslider.setPageStep(window)
+        self.timeslider.setValue(0)
+        self.timeslider.blockSignals(False)
+        self.ax00.set_xlim(0, window)
         self.canvas0.draw()
 
     def plot_peaks(self, peaks):
@@ -455,11 +512,58 @@ class View(QMainWindow):
         --------
         model.Model.peaks
         """
-        if self.ax00.collections:    # self.scat is listed in ax.collections
+        if self.ax00.collections:
             self.ax00.collections[0].remove()
+        if self._model.showmalik and len(peaks) > 2:
+            rr = np.diff(peaks.astype(float))
+            violations = np.concatenate([[False, False],
+                                         np.abs(np.diff(rr)) / rr[:-1] > 0.20])
+            colors = np.where(violations, 'red', 'm')
+        else:
+            colors = 'm'
         self.scat = self.ax00.scatter(self._model.sec[peaks],
-                                      self._model.signal[peaks], c="m",
+                                      self._model.signal[peaks], c=colors,
                                       zorder=2)
+        self.canvas0.draw()
+
+    def scroll_view(self, value):
+        if self._model.sec is None:
+            return
+        window = self.windowspinbox.value()
+        self.ax00.set_xlim(value, value + window)
+        self.canvas0.draw()
+        self.canvas1.draw()
+        self.canvas2.draw()
+
+    def update_window(self, window):
+        if self._model.sec is None:
+            return
+        total = int(self._model.sec[-1])
+        self.timeslider.setMaximum(max(0, total - window))
+        self.timeslider.setPageStep(window)
+        self.scroll_view(self.timeslider.value())
+
+    def key_shortcuts(self, event):
+        if event.key in ('+', '='):
+            self.scale_amplitude(1 / 1.5)
+        elif event.key == '-':
+            self.scale_amplitude(1.5)
+        elif event.key == '[':
+            self.windowspinbox.setValue(max(2, self.windowspinbox.value() - 5))
+        elif event.key == ']':
+            self.windowspinbox.setValue(min(600, self.windowspinbox.value() + 5))
+        elif event.key == 'left':
+            step = max(1, self.windowspinbox.value() // 4)
+            self.timeslider.setValue(max(0, self.timeslider.value() - step))
+        elif event.key == 'right':
+            step = max(1, self.windowspinbox.value() // 4)
+            self.timeslider.setValue(
+                min(self.timeslider.maximum(), self.timeslider.value() + step))
+
+    def scale_amplitude(self, factor):
+        ymin, ymax = self.ax00.get_ylim()
+        half = (ymax - ymin) / 2 * factor
+        self.ax00.set_ylim(-half, half)
         self.canvas0.draw()
 
     def plot_segment(self, segment):
@@ -698,6 +802,25 @@ class View(QMainWindow):
             self.endedit.insert("{:.2f}".format(mouse_event.xdata))
         self.segmentcursor = False    # disable segment cursor again after value has been set
 
+    def _apply_filter_settings(self):
+        def parse(field):
+            try:
+                v = float(field.text())
+                return v if v > 0 else None
+            except ValueError:
+                return None
+        self._model.hp_freq = parse(self.hpfield)
+        self._model.lp_freq = parse(self.lpfield)
+        self._model.notch_freq = parse(self.notchfield)
+        self._controller.refilter()
+
+    def load_plain(self):
+        self._model.set_filetype("Custom")
+        self._model.customheader = {"signalidx": 1, "markeridx": None,
+                                    "skiprows": 0, "sfreq": 1000,
+                                    "separator": ","}
+        self._controller.load_channels()
+
     def set_customheader(self):
         """Populate the customheader with inputs from the customfiledialog."""
         mandatoryfields = self.signaledit.text() and self.headerrowsedit.text() and self.sfreqedit.text()    # check if one of the mandatory fields is missing
@@ -780,6 +903,10 @@ class View(QMainWindow):
 
     def reset_plot(self):
         """Reset plot elements associated with the current dataset."""
+        self.timeslider.blockSignals(True)
+        self.timeslider.setValue(0)
+        self.timeslider.setMaximum(0)
+        self.timeslider.blockSignals(False)
         self.ax00.clear()
         self.ax00.relim()
         self.line00 = None

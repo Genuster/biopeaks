@@ -11,7 +11,7 @@ from biopeaks.resp import ensure_peak_trough_alternation, resp_extrema, resp_sta
 from biopeaks.io_utils import (read_custom, read_opensignals, read_edf,
                                write_custom, write_opensignals, write_edf)
 from pathlib import Path
-from scipy.signal import find_peaks as find_peaks_scipy
+from scipy.signal import find_peaks as find_peaks_scipy, butter, filtfilt, iirnotch
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtWidgets import QFileDialog
 getOpenFileName = QFileDialog.getOpenFileName
@@ -270,10 +270,13 @@ class Controller(QObject):
                 self._model.peaks = np.delete(self._model.peaks, peakidx)
         elif key_event.key == 'a':
             searchsignal = self._model.signal[searchrange]
-            locmax, _ = find_peaks_scipy(searchsignal)    # use Scipy's find_peaks to also detect local extrema that are plateaus
-            locmin, _ = find_peaks_scipy(searchsignal * -1)
-            locext = np.concatenate((locmax, locmin))
-            locext.sort(kind='mergesort')
+            locmax, _ = find_peaks_scipy(searchsignal)
+            if self._model.snaptomax:
+                locext = locmax
+            else:
+                locmin, _ = find_peaks_scipy(searchsignal * -1)
+                locext = np.concatenate((locmax, locmin))
+                locext.sort(kind='mergesort')
             if locext.size < 1:
                 return
             peakidx = np.argmin(np.abs(searchrange[locext] - cursor))
@@ -354,6 +357,29 @@ class Controller(QObject):
             return
         self._model.status = f"Auto-correcting {self._model.modality} peaks"
         self._model.peaks = correct_peaks(self._model.peaks, self._model.sfreq)
+
+    def _filter_signal(self, sig):
+        sfreq = self._model.sfreq
+        nyq = sfreq / 2
+        if self._model.hp_freq:
+            b, a = butter(2, self._model.hp_freq / nyq, btype='high')
+            sig = filtfilt(b, a, sig)
+        if self._model.lp_freq:
+            b, a = butter(2, self._model.lp_freq / nyq, btype='low')
+            sig = filtfilt(b, a, sig)
+        if self._model.notch_freq:
+            b, a = iirnotch(self._model.notch_freq / nyq, Q=30)
+            sig = filtfilt(b, a, sig)
+        return sig
+
+    @threaded
+    def refilter(self):
+        if self._model.raw_signal is None:
+            return
+        self._model.status = "Filtering signal."
+        self._model.signal = self._filter_signal(self._model.raw_signal.copy())
+        if self._model.peaks is not None:
+            self._model.peaks_changed.emit(self._model.peaks)
 
     @threaded
     def calculate_stats(self):
@@ -463,9 +489,10 @@ class Controller(QObject):
             self._model.set_filetype(None)    # reset file type
             return
 
-        self._model.sfreq = biosignal["sfreq"]    # in case of custom file, sfreq is now taken over from customheader
-        self._model.sec = biosignal["sec"]    # set seconds prior to signal, otherwise plotting in View behaves unexpectedly (since plotting is triggered as soon as signal changes)
-        self._model.signal = biosignal["signal"]
+        self._model.sfreq = biosignal["sfreq"]
+        self._model.sec = biosignal["sec"]
+        self._model.raw_signal = biosignal["signal"]
+        self._model.signal = self._filter_signal(biosignal["signal"])
         self._model.loaded = True
         self._model.rpathsignal = path
 

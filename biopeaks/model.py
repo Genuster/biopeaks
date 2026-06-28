@@ -90,9 +90,15 @@ class Model(QObject):
 
         self._loaded = False
         self._peakseditable = False
+        self._snaptomax = False
+        self._showmalik = False
         self._plotting = True
         self._savebatchpeaks = False
         self._correctbatchpeaks = False
+        self._raw_signal = None
+        self._hp_freq = 0.5
+        self._lp_freq = None
+        self._notch_freq = None
         self._signal = None
         self._peaks = None
         self._periodintp = None
@@ -154,6 +160,40 @@ class Model(QObject):
         self._wpathstats = None
 
         self.model_reset.emit()
+
+    # Filter params and raw signal — plain properties, no Qt signals needed.
+
+    @property
+    def raw_signal(self):
+        return self._raw_signal
+
+    @raw_signal.setter
+    def raw_signal(self, value):
+        self._raw_signal = value
+
+    @property
+    def hp_freq(self):
+        return self._hp_freq
+
+    @hp_freq.setter
+    def hp_freq(self, value):
+        self._hp_freq = value
+
+    @property
+    def lp_freq(self):
+        return self._lp_freq
+
+    @lp_freq.setter
+    def lp_freq(self, value):
+        self._lp_freq = value
+
+    @property
+    def notch_freq(self):
+        return self._notch_freq
+
+    @notch_freq.setter
+    def notch_freq(self, value):
+        self._notch_freq = value
 
     # The following attributes are set by the View or Controller (i.e., they
     # are not slots connected to a signal).
@@ -592,6 +632,28 @@ class Model(QObject):
             self._peakseditable = True
         elif value == 0:
             self._peakseditable = False
+
+    @Property(int)
+    def snaptomax(self):
+        return self._snaptomax
+
+    @Slot(int)
+    def set_snaptomax(self, value):
+        if value == 2:
+            self._snaptomax = True
+        elif value == 0:
+            self._snaptomax = False
+
+    @Property(int)
+    def showmalik(self):
+        return self._showmalik
+
+    @Slot(int)
+    def set_showmalik(self, value):
+        if value == 2:
+            self._showmalik = True
+        elif value == 0:
+            self._showmalik = False
 
     @Property(int)
     def savebatchpeaks(self):
