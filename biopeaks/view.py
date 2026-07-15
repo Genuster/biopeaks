@@ -73,7 +73,14 @@ class View(QMainWindow):
         self.canvas0.setMinimumHeight(1)    # in pixels
         self.ax00 = self.figure0.add_subplot(1, 1, 1)
         self.ax00.set_frame_on(False)
-        self.figure0.subplots_adjust(left=0.04, right=0.98, bottom=0.25)
+        # bottom=0.25 was sized for canvas0 sharing the splitter with canvas2;
+        # with the stats panel hidden by default, canvas0 gets the full
+        # splitter height, so that fraction became a large absolute gap below
+        # the x-axis. 0.08 is enough for tick labels + the "seconds" label.
+        # top was never set, so it defaulted to ~0.88 (matplotlib reserves
+        # headroom for a title ax00 doesn't have) -- same wasted-space issue
+        # as bottom, just on the other edge.
+        self.figure0.subplots_adjust(left=0.04, right=0.98, bottom=0.08, top=0.98)
         self.line00 = None
         self.scat = None
         self.segmentspan = None
@@ -135,6 +142,13 @@ class View(QMainWindow):
         self.malikcheckbox.stateChanged.connect(
             lambda: self._model.peaks_changed.emit(self._model.peaks)
             if self._model.peaks is not None else None)
+
+        # Hide the bottom stats panel (period/rate/tidal amplitude), leaving
+        # only the biosignal time series visible.
+        self.hidestatscheckbox = QCheckBox("hide stats panel", self)
+        self.hidestatscheckbox.stateChanged.connect(
+            lambda state: self.canvas2.setVisible(not state))
+        self.hidestatscheckbox.setChecked(True)
 
         # Peak saving during batch processing.
         self.savecheckbox = QCheckBox("save during batch processing", self)
@@ -410,6 +424,7 @@ class View(QMainWindow):
         self.vlayoutC.addWidget(self.malikcheckbox)
         self.vlayoutC.addWidget(self.savecheckbox)
         self.vlayoutC.addWidget(self.correctcheckbox)
+        self.vlayoutC.addWidget(self.hidestatscheckbox)
         self.optionsgroupC.setLayout(self.vlayoutC)
 
         self.optionsgroupD = QGroupBox("select statistics for saving")
@@ -561,9 +576,17 @@ class View(QMainWindow):
                 min(self.timeslider.maximum(), self.timeslider.value() + step))
 
     def scale_amplitude(self, factor):
+        """Zoom the biosignal y-axis by factor, centered off-zero.
+
+        R-peaks are the salient, predominantly positive-going feature of an
+        ECG; Q/S troughs are comparatively small. A symmetric +/-half split
+        around zero wastes headroom below zero that the signal rarely uses.
+        75/25 puts most of the range above zero, closer to how the trace
+        actually fills the frame.
+        """
         ymin, ymax = self.ax00.get_ylim()
-        half = (ymax - ymin) / 2 * factor
-        self.ax00.set_ylim(-half, half)
+        span = (ymax - ymin) * factor
+        self.ax00.set_ylim(-span * 0.25, span * 0.75)
         self.canvas0.draw()
 
     def plot_segment(self, segment):
